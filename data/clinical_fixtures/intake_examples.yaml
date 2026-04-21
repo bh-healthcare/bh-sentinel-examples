@@ -1,0 +1,49 @@
+# Additional synthetic clinical intake examples.
+#
+# Same schema as data/real_world_corpus.yaml. All entries are synthetic
+# (not from real patients). Use this file to prototype new fixtures
+# without touching the shared corpus that the main bh-sentinel repo
+# mirrors.
+
+fixtures:
+  - id: intake_med_only
+    source: synthetic
+    year: 2026
+    public_domain: true
+    category: clinical_vignette
+    expected_flags_hint: [MED-002, MED-005]
+    notes: Pure medication non-adherence -- isolates the MED-* detection path.
+    text: >-
+      Patient states she stopped taking her Zoloft two weeks ago. Says
+      she did not like how it made her feel and does not want to start
+      anything new. Denies suicidal or homicidal ideation. Reports
+      normal sleep and appetite.
+
+  - id: intake_protective_only
+    source: synthetic
+    year: 2026
+    public_domain: true
+    category: clinical_vignette
+    expected_flags_hint: [PF-001, PF-002, PF-003, PF-004]
+    notes: All-protective intake. Must NOT trigger immediate review.
+    text: >-
+      Patient arrived on time for her follow-up appointment. She reports
+      using her DBT distress tolerance skills twice this week when she
+      felt overwhelmed. Her sister has been calling daily and she plans
+      to join a community art class next month. She is committed to
+      continuing weekly therapy and taking her medication as prescribed.
+
+  - id: intake_ambiguous_temporal
+    source: synthetic
+    year: 2026
+    public_domain: true
+    category: clinical_vignette
+    expected_flags_hint: [SH-008]
+    notes: >-
+      Past-tense suicidal reference only. L1 temporal detector should
+      classify this as past; severity should de-escalate accordingly.
+    text: >-
+      Patient mentions that ten years ago she was hospitalized after a
+      serious attempt. She has not had any similar thoughts in the past
+      five years and feels stable on her current regimen. Engaged in
+      outpatient therapy weekly.

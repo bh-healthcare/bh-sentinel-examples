@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bh-sentinel-examples"
+version = "0.1.0"
+description = "Reproducible local integrations for bh-sentinel (core + ml)"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "BH Healthcare", email = "oss@bh-healthcare.github.io" },
+]
+keywords = [
+    "nlp",
+    "clinical",
+    "safety",
+    "behavioral-health",
+    "healthcare",
+    "examples",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# These pins track the latest released bh-sentinel packages.
+# Bump on every bh-sentinel release; see CHANGELOG.md for the mapping.
+dependencies = [
+    "bh-sentinel-core>=0.1.1,<0.2",
+    "bh-sentinel-ml>=0.2.0,<0.3",
+    "pyyaml>=6,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<9",
+    "ruff>=0.1.0,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/bh-healthcare/bh-sentinel-examples"
+Parent = "https://github.com/bh-healthcare/bh-sentinel"
+Issues = "https://github.com/bh-healthcare/bh-sentinel-examples/issues"
+
+# This repo is not published to PyPI -- it's an examples/integration repo.
+# The [project] block is included for editable installs and tooling.
+[tool.hatch.build.targets.wheel]
+packages = ["examples", "scripts"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
