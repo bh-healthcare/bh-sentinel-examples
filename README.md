@@ -118,59 +118,68 @@ de-identified organizational notes before tuning thresholds. See
 [bh-sentinel architecture §4.8](https://github.com/bh-healthcare/bh-sentinel/blob/main/docs/architecture.md)
 for the recommended workflow.
 
-## Regenerating the real-model report (bh-sentinel-ml v0.2.1 prerequisite)
+## How the L1 vs L2 report was generated
 
-The checked-in [`reports/sample_l1_vs_l2.md`](reports/sample_l1_vs_l2.md)
-is a stub showing the report *format*. Generating a real L1 vs L2
-table requires a canonical ONNX export of the DistilBART-MNLI baseline
-and an exact SHA pinned in `bh-sentinel-ml`'s `ml_config.yaml`.
+As of `bh-sentinel-ml 0.2.2`, the canonical INT8 ONNX artifact is
+published under the bh-healthcare HF org at
+[`bh-healthcare/roberta-large-mnli-int8-onnx`](https://huggingface.co/bh-healthcare/roberta-large-mnli-int8-onnx)
+(quantized export of [`FacebookAI/roberta-large-mnli`](https://huggingface.co/FacebookAI/roberta-large-mnli)),
+with `model_revision` and `model_sha256` pinned in
+[`bh-sentinel/config/ml/ml_config.yaml`](https://github.com/bh-healthcare/bh-sentinel/blob/main/config/ml/ml_config.yaml).
+The verify-on-load SHA256 check in `TransformerClassifier` passes against
+the published artifact, so `Pipeline(enable_transformer=True)` works
+end-to-end on first call.
 
-As of `bh-sentinel-ml 0.2.0`, the pinned revision is `"main"` and the
-pinned SHA256 is a placeholder (see the TODOs in
-[`bh-sentinel/config/ml/ml_config.yaml`](https://github.com/bh-healthcare/bh-sentinel/blob/main/config/ml/ml_config.yaml)).
-The follow-up release `bh-sentinel-ml 0.2.1` will:
-
-1. Export `valhalla/distilbart-mnli-12-3` (or equivalent) to ONNX
-   using `optimum-cli export onnx`.
-2. INT8 quantize via `onnxruntime.quantization`.
-3. Host the converted artifact under the bh-healthcare HF org (or
-   cite a trusted third-party ONNX conversion with a pinned SHA).
-4. Update `model_revision` and `model_sha256` in `ml_config.yaml` +
-   the vendored copy.
-5. Add a `scripts/export_onnx.py` helper to bh-sentinel-ml for anyone
-   wanting to re-export locally.
-
-### Reproducing locally today (one-off, pre-0.2.1)
-
-If you want to generate a real report before `0.2.1` lands:
+Generating a fresh report against the corpus is now a three-command flow:
 
 ```bash
-# From this repo root:
-pip install "optimum[onnxruntime]>=1.16"
-
-# Convert the HF model to ONNX (takes 3-5 min, writes several files)
-optimum-cli export onnx \
-    --model valhalla/distilbart-mnli-12-3 \
-    --task zero-shot-classification \
-    ./model
-
-# The exporter writes model.onnx; bh-sentinel-ml expects model_int8.onnx
-# by default. Either rename or pass --onnx-filename to the CLI.
-cp model/model.onnx model/model_int8.onnx
-
-# Compute the SHA256 the TransformerClassifier will verify against:
-shasum -a 256 model/model_int8.onnx
-
-# Temporarily patch the vendored ml_config.yaml in your editable
-# bh-sentinel-ml checkout to match the SHA you just computed, then:
+make install            # pulls bh-sentinel-ml==0.2.2 from PyPI
+make download-model     # one-time: fetches the pinned INT8 ONNX into ./model/
 make example-batch-corpus
-
-# The generated report lands in ./reports/l1_vs_l2_<timestamp>.md
 ```
 
-Contributions that automate this conversion + pinning flow are
-welcome once `bh-sentinel-ml 0.2.1` resolves the canonical model
-source.
+The checked-in [`reports/sample_l1_vs_l2.md`](reports/sample_l1_vs_l2.md) is a real
+run of this flow against the `bh-sentinel-ml 0.2.2` artifact. Re-runs on
+different hardware may produce small per-confidence differences in the
+L2-only / corroborated columns due to ONNX Runtime CPU optimizations --
+the structural L1-only vs L2-only split is stable.
+
+### Observed vs designed: an honest read of the report
+
+The bh-sentinel [main README's "What Layer 2 is designed to target"
+table](https://github.com/bh-healthcare/bh-sentinel#what-layer-2-is-designed-to-target-on-the-literary-corpus)
+lists aspirational L2 catches on the literary corpus -- e.g. SH-002 on
+Woolf, CD-002/CD-005c on Dostoevsky, CD-003/CD-006 on Gilman. The actual
+v0.2.2 run **misses all of these on both layers.** That's not a bug; it's
+the architecture's `FixedDiscount(0.85)` Phase A calibration meeting
+literary text honestly:
+
+- The model has strong discrimination on direct clinical disclosure (e.g.
+  it emits 0.998 entailment on "I feel hopeless..." vs "speaker expresses
+  hopelessness"). All clinical vignettes get good L1+L2 coverage.
+- It has weaker discrimination on metaphorical / period / conditional-mood
+  literary text. Raw entailment scores tend to land in the 0.40--0.60
+  range, which the conservative Phase A calibration squashes below the
+  `min_emit_confidence = 0.55` emit threshold.
+- L2 produces **zero** L2-only flag emissions on this corpus. L2 corroborates
+  L1 detections (raising confidence on agreed signals) but doesn't add new
+  detections on its own. That's a Phase A characteristic, not a Phase A goal.
+- The three true-negative entries (weather, recipe, sports) correctly
+  produce zero flags. No false positives on routine text.
+
+This is the expected state at Phase A. The architecture
+([`docs/architecture.md`](https://github.com/bh-healthcare/bh-sentinel/blob/main/docs/architecture.md)
+§"Phased model development") commits to Phase B for the literary-coverage
+gap: fine-tuning on clinician-labeled clinical NLI data once that data is
+available. Until Phase B ships, L2's role is **clinical corroboration**,
+not **literary semantic capture**.
+
+If you want to re-export the artifact yourself (e.g. against a different
+upstream base model, or to verify reproducibility), the upstream
+[`scripts/export_onnx.py`](https://github.com/bh-healthcare/bh-sentinel/blob/main/scripts/export_onnx.py)
+in the bh-sentinel monorepo is the canonical tool. See
+[`docs/ml-artifact-provenance.md`](https://github.com/bh-healthcare/bh-sentinel/blob/main/docs/ml-artifact-provenance.md)
+in that repo for the licensing chain and re-pinning workflow.
 
 ## Contributing
 

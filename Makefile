@@ -4,8 +4,15 @@
 SHELL := /bin/bash
 PYTHON ?= python3.11
 MODEL_DIR := model
-PINNED_REVISION ?= main
-PINNED_SHA256 ?=
+
+# Pinned values for the canonical bh-sentinel-ml >= 0.2.2 artifact hosted at
+# https://huggingface.co/bh-healthcare/roberta-large-mnli-int8-onnx. These
+# defaults must match config/ml/ml_config.yaml in the bh-sentinel repo. When
+# bh-sentinel-ml ships a new pinned model, bump both values here and in
+# bh-sentinel's ml_config.yaml in lockstep -- see bh-sentinel's
+# docs/ml-artifact-provenance.md for the full re-pinning workflow.
+PINNED_REVISION ?= 69eb03178c210deceb076f0a8302bc5705179a58
+PINNED_SHA256   ?= 49fa5562da7f1422525e88fd1145d2d06ca93b17c335adf3c4696a30908c91de
 
 .PHONY: help install install-local download-model \
         example-quickstart example-full-pipeline example-batch-corpus example-offline \

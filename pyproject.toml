@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bh-sentinel-examples"
-version = "0.1.0"
+version = "0.1.1"
 description = "Reproducible local integrations for bh-sentinel (core + ml)"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 authors = [
-    { name = "BH Healthcare", email = "oss@bh-healthcare.github.io" },
+    { name = "BH Healthcare", email = "oss@bh-healthcare.org" },
 ]
 keywords = [
     "nlp",
@@ -32,11 +32,13 @@ classifiers = [
 ]
 
 # These pins track the latest released bh-sentinel packages.
-# Bump on every bh-sentinel release; see CHANGELOG.md for the mapping.
+# Bump on every bh-sentinel release; the bh-sentinel monorepo CHANGELOG.md
+# (https://github.com/bh-healthcare/bh-sentinel/blob/main/CHANGELOG.md)
+# is the authoritative record of which versions go together.
 dependencies = [
-    "bh-sentinel-core>=0.1.1,<0.2",
-    "bh-sentinel-ml>=0.2.0,<0.3",
-    "pyyaml>=6,<7",
+    "bh-sentinel-core>=0.1.1,<0.2",   # pattern-matching layer + pipeline scaffolding
+    "bh-sentinel-ml>=0.2.2,<0.3",     # 0.2.2 ships the pinned RoBERTa-large-MNLI INT8 ONNX artifact (0.2.1 yanked: L2 was silently broken)
+    "pyyaml>=6,<7",                    # corpus YAML loader
 ]
 
 [project.optional-dependencies]
