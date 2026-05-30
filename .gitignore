@@ -213,3 +213,13 @@ __marimo__/
 .claude/
 .cursor/
 CLAUDE.md
+
+# macOS
+.DS_Store
+
+# Downloaded model (lands here after `make download-model`; ~342MB, never commit)
+/model/
+
+# Generated evaluation artifacts -- only reports/sample_l1_vs_l2.md is tracked
+reports/l1_vs_l2_*.md
+reports/experiment/
