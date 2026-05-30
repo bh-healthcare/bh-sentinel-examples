@@ -31,7 +31,7 @@ per-entry L1-vs-L2 comparison report on your own workstation.
 
 ```bash
 make install            # installs the pinned bh-sentinel-core + bh-sentinel-ml from PyPI
-make download-model     # one-time: fetch the pinned DistilBART-MNLI INT8 revision into ./model/
+make download-model     # one-time: fetch the pinned RoBERTa-large-MNLI INT8 revision into ./model/
 ```
 
 For development against an unreleased branch of `bh-sentinel`:
@@ -105,7 +105,7 @@ Layer 2 ships with `FixedDiscount(0.85)` as its Phase A calibrator
 against clinician-labeled data is a v0.3 deliverable. **Do not treat
 the confidence numbers in these reports as clinically validated
 probabilities.** They reflect a conservative dampening of the raw
-DistilBART-MNLI softmax output, which is itself uncalibrated on
+RoBERTa-large-MNLI softmax output, which is itself uncalibrated on
 clinical text. The purpose of these examples is:
 
 1. Demonstrate the integration is wired correctly end-to-end.
@@ -120,7 +120,7 @@ for the recommended workflow.
 
 ## How the L1 vs L2 report was generated
 
-As of `bh-sentinel-ml 0.2.2`, the canonical INT8 ONNX artifact is
+As of `bh-sentinel-ml 0.2.3`, the canonical INT8 ONNX artifact is
 published under the bh-healthcare HF org at
 [`bh-healthcare/roberta-large-mnli-int8-onnx`](https://huggingface.co/bh-healthcare/roberta-large-mnli-int8-onnx)
 (quantized export of [`FacebookAI/roberta-large-mnli`](https://huggingface.co/FacebookAI/roberta-large-mnli)),
@@ -133,46 +133,66 @@ end-to-end on first call.
 Generating a fresh report against the corpus is now a three-command flow:
 
 ```bash
-make install            # pulls bh-sentinel-ml==0.2.2 from PyPI
+make install            # pulls bh-sentinel-ml==0.2.3 from PyPI
 make download-model     # one-time: fetches the pinned INT8 ONNX into ./model/
 make example-batch-corpus
 ```
 
 The checked-in [`reports/sample_l1_vs_l2.md`](reports/sample_l1_vs_l2.md) is a real
-run of this flow against the `bh-sentinel-ml 0.2.2` artifact. Re-runs on
+run of this flow against the `bh-sentinel-ml 0.2.3` artifact. Re-runs on
 different hardware may produce small per-confidence differences in the
 L2-only / corroborated columns due to ONNX Runtime CPU optimizations --
 the structural L1-only vs L2-only split is stable.
 
 ### Observed vs designed: an honest read of the report
 
+> **Correction (`bh-sentinel-core 0.1.2` / `bh-sentinel-ml 0.2.3`).** Earlier
+> versions of this section claimed L2 "produces **zero** L2-only flag
+> emissions" and that the true negatives showed "no false positives on
+> routine text." **Both were wrong.** They were artifacts of a Layer 2
+> attribution bug in `bh-sentinel-core < 0.1.2`: every flag was mislabeled
+> `detection_layer = pattern_match`, so the report's "L2-only" bucket was
+> structurally always empty no matter what the transformer actually emitted.
+> With the fix in place, the report shows the real -- and far less
+> flattering -- picture below.
+
 The bh-sentinel [main README's "What Layer 2 is designed to target"
 table](https://github.com/bh-healthcare/bh-sentinel#what-layer-2-is-designed-to-target-on-the-literary-corpus)
-lists aspirational L2 catches on the literary corpus -- e.g. SH-002 on
-Woolf, CD-002/CD-005c on Dostoevsky, CD-003/CD-006 on Gilman. The actual
-v0.2.2 run **misses all of these on both layers.** That's not a bug; it's
-the architecture's `FixedDiscount(0.85)` Phase A calibration meeting
-literary text honestly:
+lists aspirational L2 catches on the literary corpus -- SH-002 on Woolf,
+CD-002/CD-005c on Dostoevsky, CD-006 on Gilman. With correct attribution,
+L2 **does** emit most of these -- but it emits a flood of everything else
+alongside them, including on text that should stay silent:
 
-- The model has strong discrimination on direct clinical disclosure (e.g.
-  it emits 0.998 entailment on "I feel hopeless..." vs "speaker expresses
-  hopelessness"). All clinical vignettes get good L1+L2 coverage.
-- It has weaker discrimination on metaphorical / period / conditional-mood
-  literary text. Raw entailment scores tend to land in the 0.40--0.60
-  range, which the conservative Phase A calibration squashes below the
-  `min_emit_confidence = 0.55` emit threshold.
-- L2 produces **zero** L2-only flag emissions on this corpus. L2 corroborates
-  L1 detections (raising confidence on agreed signals) but doesn't add new
-  detections on its own. That's a Phase A characteristic, not a Phase A goal.
-- The three true-negative entries (weather, recipe, sports) correctly
-  produce zero flags. No false positives on routine text.
+- **L2 over-fires badly.** The corpus run now shows **~128 L2-only
+  emissions** (vs 6 L1-only and 9 corroborated; L1/L2 agreement ~6%).
+  Zero-shot NLI over the 40 flag hypotheses is extremely permissive on
+  non-clinical text.
+- **False positives on all three true negatives.** Weather, recipe, and
+  sports draw 5, 8, and 9 spurious flags respectively -- e.g. a
+  substance-use flag fires on *"Don't forget your sunscreen."* These
+  entries should produce zero flags.
+- **It does add real recall.** L2 recovers expected clinical signals L1
+  misses -- MED-002 / SH-004 / SU-003 on the crisis intake, PF-001 / PF-002
+  on the routine session -- and catches the literary targets (Woolf
+  SH-002, Dostoevsky CD-002/CD-005c). That recall is L2's reason to exist.
+- **Thresholds cannot separate the two.** The genuine signals and the
+  benign-text false positives overlap in score space: a real self-harm
+  disclosure (SH-004, calibrated **0.747**) and a sunscreen reminder
+  (PF-003, calibrated **0.745**) land within 0.002 of each other. Raising
+  `min_emit_confidence` enough to silence the true negatives also discards
+  the subtle clinical detections L2 was added to provide. Over-firing also
+  scales with document length -- each added sentence is another
+  max-over-hypotheses draw.
 
-This is the expected state at Phase A. The architecture
+**The honest read: Phase A zero-shot L2 has useful recall but unusable
+precision on non-clinical text.** It is not production-ready, and the fix
+is not a threshold -- it is discrimination: sharper, clinically-gated
+hypotheses and ultimately the Phase B fine-tuned clinical model. The
+architecture
 ([`docs/architecture.md`](https://github.com/bh-healthcare/bh-sentinel/blob/main/docs/architecture.md)
-§"Phased model development") commits to Phase B for the literary-coverage
-gap: fine-tuning on clinician-labeled clinical NLI data once that data is
-available. Until Phase B ships, L2's role is **clinical corroboration**,
-not **literary semantic capture**.
+§"Phased model development") commits to that Phase B work. Until it ships,
+treat L2-only emissions as **low-precision candidates for clinician
+review**, never as autonomous detections.
 
 If you want to re-export the artifact yourself (e.g. against a different
 upstream base model, or to verify reproducibility), the upstream

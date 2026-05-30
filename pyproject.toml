@@ -36,8 +36,8 @@ classifiers = [
 # (https://github.com/bh-healthcare/bh-sentinel/blob/main/CHANGELOG.md)
 # is the authoritative record of which versions go together.
 dependencies = [
-    "bh-sentinel-core>=0.1.1,<0.2",   # pattern-matching layer + pipeline scaffolding
-    "bh-sentinel-ml>=0.2.2,<0.3",     # 0.2.2 ships the pinned RoBERTa-large-MNLI INT8 ONNX artifact (0.2.1 yanked: L2 was silently broken)
+    "bh-sentinel-core>=0.1.2,<0.2",   # 0.1.2 fixes L2 detection-layer attribution -- required for correct L1/L2 report bucketing
+    "bh-sentinel-ml>=0.2.3,<0.3",     # 0.2.3 adds score_flags(); RoBERTa-large-MNLI INT8 ONNX artifact (0.2.1 yanked: L2 was silently broken)
     "pyyaml>=6,<7",                    # corpus YAML loader
 ]
 
